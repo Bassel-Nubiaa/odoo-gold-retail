@@ -25,6 +25,7 @@
                             <field name="product_qty"/>
                             <field name="product_uom_id"/>
                             <field name="price_unit"/>
+                            <field name="sale_order_id" readonly="1"/>                            
                             <field name="currency_id" column_invisible="True"/>
                         </list>
                     </field>
@@ -32,5 +33,32 @@
             </page>
         </field>
     </record>
+
+
+    <!-- Purchase order header and smart buttons: generate and open customer orders -->
+    <record id="purchase_order_view_form_inherit_customer_orders" model="ir.ui.view">
+        <field name="name">purchase.order.view.form.inherit.customer.orders</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <header position="inside">
+                <button name="action_generate_customer_orders"
+                        type="object"
+                        string="Generate Customer Orders"
+                        class="btn-primary"
+                        invisible="state not in ('purchase', 'done') or not allocation_ids"/>
+            </header>
+            <div name="button_box" position="inside">
+                <button name="action_view_customer_orders"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-users"
+                        invisible="not sale_order_count">
+                    <field name="sale_order_count" widget="statinfo" string="Customer Orders"/>
+                </button>
+            </div>
+        </field>
+    </record>
+    
 
 </odoo>

@@ -37,6 +37,14 @@ class PurchaseOrderAllocation(models.Model):
     )
     price_unit = fields.Monetary(string="Sale Price", currency_field="currency_id")
 
+    # Set when the customer's sales order is generated.
+    sale_line_id = fields.Many2one(
+        "sale.order.line", string="Sales Order Line", readonly=True, copy=False
+    )
+    sale_order_id = fields.Many2one(
+        related="sale_line_id.order_id", string="Sales Order"
+    )
+
     # -------------------------------------------------------------------------
     # Constraints
     # -------------------------------------------------------------------------
