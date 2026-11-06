@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Secrets and local settings
+.env
+*.conf
+
+# Databases, backups and archives
+*.sql
+*.dump
+*.zip
+filestore/
+
+# Never commit Odoo Enterprise code
+enterprise/
