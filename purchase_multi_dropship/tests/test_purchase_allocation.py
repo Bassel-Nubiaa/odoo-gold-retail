@@ -7,11 +7,11 @@ from odoo.tests import TransactionCase, tagged
 
 @tagged("post_install", "-at_install")
 class TestPurchaseAllocation(TransactionCase):
-    """Allocation rules: positive, on the order, within the purchased quantity."""
+    """Allocation rules: confirmed order, positive, on the order, within the purchase."""
 
     @classmethod
     def setUpClass(cls):
-        """Create a vendor, two customers and a purchase of 10 units."""
+        """Create a vendor, two customers and a confirmed purchase of 10 units."""
         super().setUpClass()
         cls.vendor = cls.env["res.partner"].create({"name": "Gold Supplier"})
         cls.customer_a = cls.env["res.partner"].create({"name": "Customer A"})
@@ -27,11 +27,12 @@ class TestPurchaseAllocation(TransactionCase):
                 "price_unit": 50,
             })],
         })
+        cls.order.button_confirm()
 
-    def _allocate(self, customer, quantity, product=None):
+    def _allocate(self, customer, quantity, product=None, order=None):
         """Allocate a quantity of the product to a customer."""
         return self.env["purchase.order.allocation"].create({
-            "order_id": self.order.id,
+            "order_id": (order or self.order).id,
             "partner_id": customer.id,
             "product_id": (product or self.product).id,
             "product_qty": quantity,
@@ -60,3 +61,9 @@ class TestPurchaseAllocation(TransactionCase):
         """Zero or negative quantities are refused."""
         with self.assertRaises(ValidationError):
             self._allocate(self.customer_a, 0)
+
+    def test_no_allocation_on_rfq(self):
+        """A purchase order still in RFQ cannot be allocated."""
+        rfq = self.order.copy()
+        with self.assertRaises(ValidationError):
+            self._allocate(self.customer_a, 1, order=rfq)

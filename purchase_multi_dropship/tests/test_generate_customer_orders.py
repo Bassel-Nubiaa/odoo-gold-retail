@@ -58,10 +58,11 @@ class TestGenerateCustomerOrders(TransactionCase):
         self.assertEqual(order_a.source_purchase_id, self.order)
 
     def test_no_warehouse_delivery(self):
-        """Confirming the generated orders creates no delivery from stock."""
+        """The generated orders get dropships only, no delivery from stock."""
         self._allocate(self.customer_a, self.gold_21k, 6, 60)
         self.order.action_generate_customer_orders()
-        self.assertFalse(self.order.sale_order_ids.picking_ids)
+        pickings = self.order.sale_order_ids.picking_ids
+        self.assertEqual(set(pickings.picking_type_id.mapped("code")), {"dropship"})
 
     def test_no_duplicates(self):
         """Generating again only creates orders for new allocations."""
@@ -73,16 +74,3 @@ class TestGenerateCustomerOrders(TransactionCase):
         self._allocate(self.customer_b, self.gold_21k, 2, 62)
         self.order.action_generate_customer_orders()
         self.assertEqual(len(self.order.sale_order_ids), 2)
-
-    def test_purchase_must_be_confirmed(self):
-        """A draft purchase order cannot generate customer orders."""
-        draft = self.order.copy()
-        self.env["purchase.order.allocation"].create({
-            "order_id": draft.id,
-            "partner_id": self.customer_a.id,
-            "product_id": self.gold_21k.id,
-            "product_qty": 1,
-            "price_unit": 60,
-        })
-        with self.assertRaises(UserError):
-            draft.action_generate_customer_orders()

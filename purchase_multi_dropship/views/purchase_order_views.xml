@@ -4,16 +4,18 @@
 -->
 <odoo>
 
-    <!-- Purchase order form: "Customer Allocations" tab after the products -->
+       <!-- Purchase order form: "Customer Allocations" tab after the products -->
     <record id="purchase_order_view_form_inherit_allocation" model="ir.ui.view">
         <field name="name">purchase.order.view.form.inherit.allocation</field>
         <field name="model">purchase.order</field>
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
             <page name="products" position="after">
-                <page string="Customer Allocations" name="customer_allocations">
-                    <!-- Helper for the product filter below; never displayed -->
+                <page string="Customer Allocations" name="customer_allocations"
+                      invisible="state not in ('purchase', 'done') or (not can_allocate and not allocation_ids)">
+                    <!-- Helpers for the conditions and the product filter; never displayed -->
                     <field name="allocation_product_ids" invisible="1"/>
+                    <field name="can_allocate" invisible="1"/>
                     <field name="allocation_ids">
                         <list editable="bottom">
                             <field name="sequence" widget="handle"/>
@@ -25,7 +27,8 @@
                             <field name="product_qty"/>
                             <field name="product_uom_id"/>
                             <field name="price_unit"/>
-                            <field name="sale_order_id" readonly="1"/>                            
+                            <field name="sale_order_id" readonly="1"/>
+                            <field name="picking_id" readonly="1"/>
                             <field name="currency_id" column_invisible="True"/>
                         </list>
                     </field>
@@ -33,7 +36,6 @@
             </page>
         </field>
     </record>
-
 
     <!-- Purchase order header and smart buttons: generate and open customer orders -->
     <record id="purchase_order_view_form_inherit_customer_orders" model="ir.ui.view">
@@ -46,7 +48,8 @@
                         type="object"
                         string="Generate Customer Orders"
                         class="btn-primary"
-                        invisible="state not in ('purchase', 'done') or not allocation_ids"/>
+                        invisible="state not in ('purchase', 'done') or not has_pending_allocations"/>
+                <field name="has_pending_allocations" invisible="1"/>
             </header>
             <div name="button_box" position="inside">
                 <button name="action_view_customer_orders"
@@ -59,6 +62,5 @@
             </div>
         </field>
     </record>
-    
 
 </odoo>

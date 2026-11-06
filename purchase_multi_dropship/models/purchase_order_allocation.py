@@ -6,7 +6,7 @@ from odoo.tools import float_compare
 
 
 class PurchaseOrderAllocation(models.Model):
-    """One customer's share of a product purchased on a purchase order.
+    """One customer's share of a product purchased on a confirmed purchase order.
 
     The allocated quantity is sold to the customer and dropshipped from the
     vendor; whatever is not allocated is received into stock as usual.
@@ -44,10 +44,22 @@ class PurchaseOrderAllocation(models.Model):
     sale_order_id = fields.Many2one(
         related="sale_line_id.order_id", string="Sales Order"
     )
+    # Set when the customer's dropship is created.
+    move_id = fields.Many2one("stock.move", string="Dropship Move", readonly=True, copy=False)
+    picking_id = fields.Many2one(related="move_id.picking_id", string="Dropship")
 
     # -------------------------------------------------------------------------
     # Constraints
     # -------------------------------------------------------------------------
+
+    @api.constrains("order_id")
+    def _check_order_confirmed(self):
+        """Allocations exist only on confirmed purchase orders."""
+        for allocation in self:
+            if allocation.order_id.state not in ("purchase", "done"):
+                raise ValidationError(
+                    _("Confirm %s before allocating it to customers.", allocation.order_id.name)
+                )
 
     @api.constrains("product_qty")
     def _check_positive_quantity(self):

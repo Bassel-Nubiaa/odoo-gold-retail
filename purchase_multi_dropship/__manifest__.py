@@ -6,8 +6,7 @@
     "author": "Bassel Nubiaa",
     "website": "https://github.com/Bassel-Nubiaa/odoo-gold-retail",
     "license": "LGPL-3",
-
-    "depends": ["purchase_stock", "sale_management", "sale_stock"],    
+    "depends": ["purchase_stock", "sale_management", "sale_stock", "stock_dropshipping"],       
     "data": [
         "security/ir.model.access.csv",
         "views/purchase_order_views.xml",
