@@ -1,66 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    Purchase order views extended with customer allocations.
--->
 <odoo>
-
-       <!-- Purchase order form: "Customer Allocations" tab after the products -->
-    <record id="purchase_order_view_form_inherit_allocation" model="ir.ui.view">
-        <field name="name">purchase.order.view.form.inherit.allocation</field>
+    <!-- Purchase order form: customer allocations and the button that generates their orders -->
+    <record id="purchase_order_form_multi_dropship" model="ir.ui.view">
+        <field name="name">purchase.order.form.multi.dropship</field>
         <field name="model">purchase.order</field>
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
-            <page name="products" position="after">
-                <page string="Customer Allocations" name="customer_allocations"
-                      invisible="state not in ('purchase', 'done') or (not can_allocate and not allocation_ids)">
-                    <!-- Helpers for the conditions and the product filter; never displayed -->
-                    <field name="allocation_product_ids" invisible="1"/>
-                    <field name="can_allocate" invisible="1"/>
-                    <field name="allocation_ids">
-                        <list editable="bottom">
-                            <field name="sequence" widget="handle"/>
-                            <field name="partner_id" options="{'no_create': True}"/>
-                            <!-- Only products purchased on this order -->
-                            <field name="product_id"
-                                   domain="[('id', 'in', parent.allocation_product_ids)]"
-                                   options="{'no_create': True}"/>
-                            <field name="product_qty"/>
-                            <field name="product_uom_id"/>
-                            <field name="price_unit"/>
-                            <field name="sale_order_id" readonly="1"/>
-                            <field name="picking_id" readonly="1"/>
-                            <field name="currency_id" column_invisible="True"/>
-                        </list>
-                    </field>
-                </page>
-            </page>
-        </field>
-    </record>
 
-    <!-- Purchase order header and smart buttons: generate and open customer orders -->
-    <record id="purchase_order_view_form_inherit_customer_orders" model="ir.ui.view">
-        <field name="name">purchase.order.view.form.inherit.customer.orders</field>
-        <field name="model">purchase.order</field>
-        <field name="inherit_id" ref="purchase.purchase_order_form"/>
-        <field name="arch" type="xml">
-            <header position="inside">
+            <!-- Header: generate the customer orders of pending allocations -->
+            <xpath expr="//header/field[@name='state']" position="before">
+                <field name="has_pending_allocations" invisible="1"/>
                 <button name="action_generate_customer_orders"
                         type="object"
                         string="Generate Customer Orders"
                         class="btn-primary"
                         invisible="state not in ('purchase', 'done') or not has_pending_allocations"/>
-                <field name="has_pending_allocations" invisible="1"/>
-            </header>
-            <div name="button_box" position="inside">
-                <button name="action_view_customer_orders"
-                        type="object"
-                        class="oe_stat_button"
-                        icon="fa-users"
-                        invisible="not sale_order_count">
-                    <field name="sale_order_count" widget="statinfo" string="Customer Orders"/>
-                </button>
-            </div>
+            </xpath>
+
+            <!-- Allocations tab: only on confirmed orders with something to allocate or already allocated -->
+            <page name="products" position="after">
+                <page name="customer_allocations"
+                      string="Customer Allocations"
+                      invisible="state not in ('purchase', 'done') or (not can_allocate and not allocation_ids)">
+                    <field name="allocation_product_ids" invisible="1"/>
+                    <field name="can_allocate" invisible="1"/>
+                    <field name="allocation_ids">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="sale_line_id" column_invisible="1"/>
+                            <field name="price_currency_id" column_invisible="1"/>
+                            <!-- Locked once the customer order exists -->
+                            <field name="partner_id" options="{'no_create': True}" readonly="sale_line_id"/>
+                            <field name="product_id"
+                                   domain="[('id', 'in', parent.allocation_product_ids)]"
+                                   options="{'no_create': True}"
+                                   readonly="sale_line_id"/>
+                            <field name="product_qty" readonly="sale_line_id"/>
+                            <field name="product_uom_id"/>
+                            <field name="currency_id"
+                                   options="{'no_create': True}"
+                                   readonly="sale_line_id"
+                                   groups="base.group_multi_currency"/>
+                            <field name="price_unit" readonly="sale_line_id"/>
+                            <field name="price_subtotal"/>
+                            <!-- Results of the generation -->
+                            <field name="sale_order_id" readonly="1"/>
+                            <field name="picking_id" readonly="1"/>
+                        </list>
+                    </field>
+                </page>
+            </page>
+
         </field>
     </record>
-
 </odoo>

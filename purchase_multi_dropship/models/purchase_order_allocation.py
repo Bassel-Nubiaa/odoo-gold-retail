@@ -1,9 +1,12 @@
 """Customer allocation: the share of a purchase order delivered to one customer."""
 
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
 from odoo.tools import float_compare
+from odoo.exceptions import UserError, ValidationError
 
+
+# Fields a generated allocation must keep, because its sales order line was built from them.
+LOCKED_FIELDS = {"order_id", "partner_id", "product_id", "product_qty", "price_unit", "currency_id"}
 
 class PurchaseOrderAllocation(models.Model):
     """One customer's share of a product purchased on a confirmed purchase order.
@@ -26,7 +29,10 @@ class PurchaseOrderAllocation(models.Model):
     )
     sequence = fields.Integer(default=10)
     company_id = fields.Many2one(related="order_id.company_id", store=True)
-    currency_id = fields.Many2one(related="order_id.currency_id")
+    currency_id = fields.Many2one("res.currency", string="Sale Currency", required=True, default=lambda self: self._default_currency_id(), )
+
+    # Currency the unit sale price was entered in; the price is converted from it on currency change.
+    price_currency_id = fields.Many2one("res.currency", string="Price Currency")
 
     partner_id = fields.Many2one("res.partner", string="Customer", required=True)
     product_id = fields.Many2one("product.product", string="Product", required=True)
@@ -35,7 +41,8 @@ class PurchaseOrderAllocation(models.Model):
     product_qty = fields.Float(
         string="Quantity", required=True, digits="Product Unit of Measure"
     )
-    price_unit = fields.Monetary(string="Sale Price", currency_field="currency_id")
+    price_unit = fields.Monetary(string="Unit Sale Price", currency_field="currency_id")
+    price_subtotal = fields.Monetary( string="Subtotal", currency_field="currency_id", compute="_compute_price_subtotal",store=True,)    
 
     # Set when the customer's sales order is generated.
     sale_line_id = fields.Many2one(
@@ -89,3 +96,61 @@ class PurchaseOrderAllocation(models.Model):
                             order=order.name,
                         )
                     )
+
+    # ------------------------------------------------------------
+    # Currency
+    # ------------------------------------------------------------
+
+    @api.model
+    def _default_currency_id(self):
+        """Return AED when it is active, otherwise the company currency."""
+        aed = self.env.ref("base.AED", raise_if_not_found=False)
+        return aed if aed and aed.active else self.env.company.currency_id
+
+    @api.onchange("price_unit")
+    def _onchange_price_unit(self):
+        """Remember the currency the price was entered in."""
+        for allocation in self:
+            allocation.price_currency_id = allocation.currency_id
+
+    @api.onchange("currency_id")
+    def _onchange_currency_id(self):
+        """Convert an entered unit sale price to the new currency at today's rate."""
+        for allocation in self:
+            source, target = allocation.price_currency_id, allocation.currency_id
+            if allocation.price_unit and source and target and source != target:
+                allocation.price_unit = source._convert(
+                    allocation.price_unit,
+                    target,
+                    allocation.order_id.company_id or self.env.company,
+                    fields.Date.context_today(allocation),
+                )
+            allocation.price_currency_id = target
+
+
+    # ------------------------------------------------------------
+    # Compute
+    # ------------------------------------------------------------
+
+    @api.depends("product_qty", "price_unit")
+    def _compute_price_subtotal(self):
+        """Multiply the allocated quantity by the unit sale price."""
+        for allocation in self:
+            allocation.price_subtotal = allocation.product_qty * allocation.price_unit
+
+    # ------------------------------------------------------------
+    # Lock generated allocations
+    # ------------------------------------------------------------
+
+    def write(self, vals):
+        """Block changes to allocations that already have a customer sales order."""
+        if LOCKED_FIELDS & vals.keys() and self.filtered("sale_line_id"):
+            raise UserError(_("Allocations that already have a customer order cannot be changed."))
+        return super().write(vals)
+
+    @api.ondelete(at_uninstall=False)
+    def _unlink_except_generated(self):
+        """Block deleting allocations that already have a customer sales order."""
+        if self.filtered("sale_line_id"):
+            raise UserError(_("Allocations that already have a customer order cannot be deleted."))
+                    

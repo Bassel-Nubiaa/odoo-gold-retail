@@ -16,7 +16,7 @@ retail business.
 
 | Module | Description | Status |
 |--------|-------------|--------|
-| Multi-customer dropshipping | One purchase order dropshipped to several customers | In development |
+| Multi-customer dropshipping | One purchase order dropshipped to several customers | Available |
 | Broken-gold netting | Offsetting broken-gold purchases against customer invoices | Planned |
 
 ## License

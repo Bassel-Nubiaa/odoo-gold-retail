@@ -31,7 +31,7 @@ class PurchaseOrder(models.Model):
     sale_order_ids = fields.One2many(
         "sale.order", "source_purchase_id", string="Customer Orders"
     )
-    sale_order_count = fields.Integer(compute="_compute_sale_order_count")
+    
 
     # Drive the visibility of the Generate button and the Allocations tab.
     has_pending_allocations = fields.Boolean(compute="_compute_allocation_status")
@@ -46,12 +46,6 @@ class PurchaseOrder(models.Model):
         """List the products purchased on the order."""
         for order in self:
             order.allocation_product_ids = order.order_line.product_id
-
-    @api.depends("sale_order_ids")
-    def _compute_sale_order_count(self):
-        """Count the customer orders generated from this purchase."""
-        for order in self:
-            order.sale_order_count = len(order.sale_order_ids)
 
 
     @api.depends(
@@ -88,63 +82,64 @@ class PurchaseOrder(models.Model):
     # -------------------------------------------------------------------------
 
     def action_generate_customer_orders(self):
-        """Sell and dropship every new allocation, one order per customer."""
-        for order in self:
-            if order.state not in ("purchase", "done"):
-                raise UserError(_("Confirm the purchase order before generating customer orders."))
-            pending = order.allocation_ids.filtered(lambda a: not a.sale_line_id)
-            if not pending:
-                raise UserError(_("%s has no new allocations to generate.", order.name))
-
-            order._check_open_receipt_quantities(pending)
-            order._reduce_receipt(pending)
-            for customer, allocations in pending.grouped("partner_id").items():
-                sale_order = order._create_customer_sale_order(customer, allocations)
-                sale_order.action_confirm()
-                order._create_customer_dropship(sale_order, allocations)
+        """Create one confirmed sales order and one dropship per customer and currency."""
+        self.ensure_one()
+        if self.state not in ("purchase", "done"):
+            raise UserError(_("Confirm the purchase order before generating customer orders."))
+        pending = self.allocation_ids.filtered(lambda allocation: not allocation.sale_line_id)
+        if not pending:
+            raise UserError(_("There are no pending allocations."))
+        self._check_open_receipt_quantities(pending)
+        self._reduce_receipt(pending)
+        groups = pending.grouped(lambda allocation: (allocation.partner_id, allocation.currency_id))
+        for (customer, currency), allocations in groups.items():
+            sale_order = self._create_customer_sale_order(customer, currency, allocations)
+            sale_order.action_confirm()
+            self._create_customer_dropship(sale_order, allocations)
         return True
 
-    def action_view_customer_orders(self):
-        """Open the sales orders generated from this purchase."""
-        self.ensure_one()
-        action = self.env["ir.actions.act_window"]._for_xml_id("sale.action_orders")
-        action["domain"] = [("source_purchase_id", "=", self.id)]
-        action["context"] = {"create": False}
-        return action
-
-    # -------------------------------------------------------------------------
-    # Sales orders
-    # -------------------------------------------------------------------------
-
-    def _create_customer_sale_order(self, customer, allocations):
-        """Create one customer's sales order and link each allocation to its line.
-
-        Sale prices are entered in the purchase order's currency and converted
-        to the sales order's currency when they differ.
-        """
-        self.ensure_one()
+    def _create_customer_sale_order(self, customer, currency, allocations):
+        """Create the customer's sales order in the allocation currency, at the allocated prices."""
         sale_order = self.env["sale.order"].create({
             "partner_id": customer.id,
             "company_id": self.company_id.id,
             "origin": self.name,
             "source_purchase_id": self.id,
+            "pricelist_id": self._get_currency_pricelist(customer, currency).id,
+            "order_line": [
+                Command.create({
+                    "product_id": allocation.product_id.id,
+                    "product_uom_qty": allocation.product_qty,
+                    "product_uom": allocation.product_uom_id.id,
+                    "price_unit": allocation.price_unit,
+                })
+                for allocation in allocations
+            ],
         })
-        sale_order.order_line = [
-            Command.create({
-                "product_id": allocation.product_id.id,
-                "product_uom_qty": allocation.product_qty,
-                "product_uom": allocation.product_uom_id.id,
-                "price_unit": self.currency_id._convert(
-                    allocation.price_unit, sale_order.currency_id,
-                    self.company_id, fields.Date.context_today(self),
-                ),
-            })
-            for allocation in allocations
-        ]
-        # Lines are created in the same order as the allocations.
+        # Link each allocation to the sales order line created from it.
         for allocation, line in zip(allocations, sale_order.order_line):
             allocation.sale_line_id = line
         return sale_order
+
+    def _get_currency_pricelist(self, customer, currency):
+        """Return a pricelist in the given currency; the sales order takes its currency from it.
+
+        Uses the customer's pricelist when it is in that currency, then any pricelist of the
+        company in that currency, and creates one without rules when none exists.
+        """
+        pricelist = customer.with_company(self.company_id).property_product_pricelist
+        if pricelist.currency_id == currency:
+            return pricelist
+        Pricelist = self.env["product.pricelist"].sudo()
+        pricelist = Pricelist.search([
+            ("currency_id", "=", currency.id),
+            ("company_id", "in", (False, self.company_id.id)),
+        ], limit=1)
+        return pricelist or Pricelist.create({
+            "name": _("%(currency)s Customer Orders", currency=currency.name),
+            "currency_id": currency.id,
+            "company_id": self.company_id.id,
+        })
 
     # -------------------------------------------------------------------------
     # Dropships and receipt
@@ -296,3 +291,7 @@ class PurchaseOrder(models.Model):
         """Return {product: allocated quantity}, in each product's own unit."""
         self.ensure_one()
         return self._sum_by_product(self.allocation_ids)
+    
+    def _get_sale_orders(self):
+        """Add the customer orders generated from allocations to the standard Sales button."""
+        return super()._get_sale_orders() | self.sale_order_ids
