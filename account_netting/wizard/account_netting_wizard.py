@@ -97,7 +97,7 @@ class AccountNettingWizard(models.TransientModel):
         bills.filtered(lambda bill: bill.state == "draft").action_post()
         self.invoice_id.with_context(netting_check=False).action_post()
 
-        allocations = self._allocate(bills)
+        allocations = self._allocate()
         if allocations:
             entry = self._create_netting_entry(journal, allocations)
             self._reconcile(entry, allocations)
@@ -119,7 +119,7 @@ class AccountNettingWizard(models.TransientModel):
         if self.line_ids.filtered(lambda line: line.mandatory and not line.selected):
             raise UserError(_("Bills that must be netted with this invoice cannot be unselected."))
 
-    def _allocate(self, bills):
+    def _allocate(self):
         """Spread the invoice's open amount over the bills, oldest first.
 
         Returns a list of (bill, amount) in company currency; the last bill may be partial.

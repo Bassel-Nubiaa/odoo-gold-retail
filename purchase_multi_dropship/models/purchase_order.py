@@ -31,11 +31,10 @@ class PurchaseOrder(models.Model):
     sale_order_ids = fields.One2many(
         "sale.order", "source_purchase_id", string="Customer Orders"
     )
-    
 
     # Drive the visibility of the Generate button and the Allocations tab.
     has_pending_allocations = fields.Boolean(compute="_compute_allocation_status")
-    can_allocate = fields.Boolean(compute="_compute_allocation_status")    
+    can_allocate = fields.Boolean(compute="_compute_allocation_status")
 
     # -------------------------------------------------------------------------
     # Compute methods
@@ -47,19 +46,12 @@ class PurchaseOrder(models.Model):
         for order in self:
             order.allocation_product_ids = order.order_line.product_id
 
-
     @api.depends(
         "state",
         "order_line.product_qty",
         "order_line.move_ids.state",
         "order_line.move_ids.product_uom_qty",
         "allocation_ids.product_qty",
-        "allocation_ids.sale_line_id",
-    )
-    @api.depends(
-        "state",
-        "order_line.move_ids.state",
-        "order_line.move_ids.product_uom_qty",
         "allocation_ids.sale_line_id",
     )
     def _compute_allocation_status(self):
@@ -238,8 +230,7 @@ class PurchaseOrder(models.Model):
                         order=self.name,
                     )
                 )
-            
-               
+
     def _reduce_receipt(self, allocations):
         """Remove the allocated quantities from the open receipt moves."""
         open_moves = self._get_open_receipt_moves()
@@ -267,7 +258,7 @@ class PurchaseOrder(models.Model):
     def _get_purchase_line(self, product):
         """Return the order line purchasing a product."""
         self.ensure_one()
-        return self.order_line.filtered(lambda l: l.product_id == product)[:1]
+        return self.order_line.filtered(lambda line: line.product_id == product)[:1]
 
     @api.model
     def _sum_by_product(self, allocations):
@@ -281,7 +272,9 @@ class PurchaseOrder(models.Model):
         """Return {product: purchased quantity}, in each product's own unit."""
         self.ensure_one()
         quantities = defaultdict(float)
-        for line in self.order_line.filtered(lambda l: l.product_id and not l.display_type):
+        for line in self.order_line.filtered(
+            lambda line: line.product_id and not line.display_type
+        ):
             quantities[line.product_id] += line.product_uom._compute_quantity(
                 line.product_qty, line.product_id.uom_id
             )
@@ -291,7 +284,7 @@ class PurchaseOrder(models.Model):
         """Return {product: allocated quantity}, in each product's own unit."""
         self.ensure_one()
         return self._sum_by_product(self.allocation_ids)
-    
+
     def _get_sale_orders(self):
         """Add the customer orders generated from allocations to the standard Sales button."""
         return super()._get_sale_orders() | self.sale_order_ids

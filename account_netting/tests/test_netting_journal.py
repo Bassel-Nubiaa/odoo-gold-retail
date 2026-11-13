@@ -28,6 +28,8 @@ class TestNettingJournal(TransactionCase):
 
     def test_setting_writes_company(self):
         """The Accounting setting saves the journal on the company."""
-        settings = self.env["res.config.settings"].create({"netting_journal_id": self.misc_journal.id})
+        settings = self.env["res.config.settings"].create({
+            "netting_journal_id": self.misc_journal.id,
+        })
         settings.execute()
         self.assertEqual(self.company.netting_journal_id, self.misc_journal)

@@ -25,8 +25,12 @@ class TestGenerateCustomerOrders(TransactionCase):
         cls.order = cls.env["purchase.order"].create({
             "partner_id": cls.vendor.id,
             "order_line": [
-                Command.create({"product_id": cls.gold_21k.id, "product_qty": 10, "price_unit": 50}),
-                Command.create({"product_id": cls.gold_18k.id, "product_qty": 5, "price_unit": 40}),
+                Command.create({
+                    "product_id": cls.gold_21k.id, "product_qty": 10, "price_unit": 50,
+                }),
+                Command.create({
+                    "product_id": cls.gold_18k.id, "product_qty": 5, "price_unit": 40,
+                }),
             ],
         })
         cls.order.button_confirm()
@@ -52,7 +56,7 @@ class TestGenerateCustomerOrders(TransactionCase):
         order_a = self.order.sale_order_ids.filtered(lambda o: o.partner_id == self.customer_a)
         self.assertEqual(order_a.state, "sale")
         self.assertEqual(len(order_a.order_line), 2)
-        line_21k = order_a.order_line.filtered(lambda l: l.product_id == self.gold_21k)
+        line_21k = order_a.order_line.filtered(lambda line: line.product_id == self.gold_21k)
         self.assertEqual(line_21k.product_uom_qty, 6)
         self.assertEqual(line_21k.price_unit, 60)
         self.assertEqual(order_a.source_purchase_id, self.order)

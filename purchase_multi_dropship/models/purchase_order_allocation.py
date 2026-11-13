@@ -8,6 +8,7 @@ from odoo.exceptions import UserError, ValidationError
 # Fields a generated allocation must keep, because its sales order line was built from them.
 LOCKED_FIELDS = {"order_id", "partner_id", "product_id", "product_qty", "price_unit", "currency_id"}
 
+
 class PurchaseOrderAllocation(models.Model):
     """One customer's share of a product purchased on a confirmed purchase order.
 
@@ -29,9 +30,13 @@ class PurchaseOrderAllocation(models.Model):
     )
     sequence = fields.Integer(default=10)
     company_id = fields.Many2one(related="order_id.company_id", store=True)
-    currency_id = fields.Many2one("res.currency", string="Sale Currency", required=True, default=lambda self: self._default_currency_id(), )
-
-    # Currency the unit sale price was entered in; the price is converted from it on currency change.
+    currency_id = fields.Many2one(
+        "res.currency",
+        string="Sale Currency",
+        required=True,
+        default=lambda self: self._default_currency_id(),
+    )
+    # Currency the unit sale price was entered in; converted from it on currency change.
     price_currency_id = fields.Many2one("res.currency", string="Price Currency")
 
     partner_id = fields.Many2one("res.partner", string="Customer", required=True)
@@ -42,7 +47,12 @@ class PurchaseOrderAllocation(models.Model):
         string="Quantity", required=True, digits="Product Unit of Measure"
     )
     price_unit = fields.Monetary(string="Unit Sale Price", currency_field="currency_id")
-    price_subtotal = fields.Monetary( string="Subtotal", currency_field="currency_id", compute="_compute_price_subtotal",store=True,)    
+    price_subtotal = fields.Monetary(
+        string="Subtotal",
+        currency_field="currency_id",
+        compute="_compute_price_subtotal",
+        store=True,
+    )
 
     # Set when the customer's sales order is generated.
     sale_line_id = fields.Many2one(
@@ -127,7 +137,6 @@ class PurchaseOrderAllocation(models.Model):
                 )
             allocation.price_currency_id = target
 
-
     # ------------------------------------------------------------
     # Compute
     # ------------------------------------------------------------
@@ -153,4 +162,3 @@ class PurchaseOrderAllocation(models.Model):
         """Block deleting allocations that already have a customer sales order."""
         if self.filtered("sale_line_id"):
             raise UserError(_("Allocations that already have a customer order cannot be deleted."))
-                    

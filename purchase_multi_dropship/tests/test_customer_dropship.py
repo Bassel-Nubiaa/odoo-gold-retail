@@ -94,7 +94,6 @@ class TestCustomerDropship(TransactionCase):
         with self.assertRaises(UserError):
             self.order.action_generate_customer_orders()
 
-
     def test_generate_button_only_for_pending_allocations(self):
         """The button is offered only while some allocations are not generated."""
         self._allocate(self.customer_a, 6)
