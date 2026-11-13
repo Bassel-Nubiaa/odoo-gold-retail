@@ -37,6 +37,10 @@
                     </list>
                 </field>
                 <footer>
+                    <button name="action_net_and_post"
+                            string="Net and Post"
+                            type="object"
+                            class="btn-primary"/>
                     <button name="action_post_without_netting"
                             string="Post Without Netting"
                             type="object"

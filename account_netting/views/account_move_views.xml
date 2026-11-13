@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Invoice form: the Confirm button asks for the netting check -->
+    <!-- Invoice form: netting check on Confirm, link to the netting entry -->
     <record id="view_move_form_netting" model="ir.ui.view">
         <field name="name">account.move.form.netting</field>
         <field name="model">account.move</field>
@@ -10,6 +10,10 @@
             <xpath expr="//header/button[@name='action_post'][contains(@invisible, &quot;move_type == 'entry'&quot;)]"
                    position="attributes">
                 <attribute name="context">{'validate_analytic': True, 'disable_abnormal_invoice_detection': False, 'netting_check': True}</attribute>
+            </xpath>
+            <!-- Other Info tab: the entry that netted this invoice -->
+            <xpath expr="//field[@name='invoice_origin']" position="after">
+                <field name="netting_move_id" invisible="not netting_move_id"/>
             </xpath>
         </field>
     </record>

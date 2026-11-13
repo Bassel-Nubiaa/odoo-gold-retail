@@ -12,7 +12,7 @@ and custom developments for a gold trading company in the UAE.
 | Module | Description | Status |
 |--------|-------------|--------|
 | [`purchase_multi_dropship`](purchase_multi_dropship/README.md) | Split a confirmed purchase order between several customers: one sales order and one dropship per customer, the rest received into the warehouse | Available |
-| `account_netting` | Settle customer invoices against the same customer's open vendor bills when the invoice is confirmed | In development |
+| [`account_netting`](account_netting/README.md) | Settle customer invoices against the same customer's open vendor bills when the invoice is confirmed | Available |
 | `sale_broken_gold` | Sales orders paid partly in old gold: the gold received becomes a vendor bill netted with the invoice | Planned |
 | `purchase_gold_stock` | Gold stock information in Purchase | Planned |
 | `account_gold_position` | Gold position report in Accounting | Planned |

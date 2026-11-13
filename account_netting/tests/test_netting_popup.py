@@ -1,60 +1,12 @@
 """Tests for the netting popup opened when a customer invoice is confirmed."""
-from odoo import Command, fields
-from odoo.tests import TransactionCase, tagged
+from odoo.tests import tagged
+
+from .common import NettingCommon
 
 
 @tagged("post_install", "-at_install")
-class TestNettingPopup(TransactionCase):
+class TestNettingPopup(NettingCommon):
     """The popup lists the partner's open bills; invoices without them post directly."""
-
-    @classmethod
-    def setUpClass(cls):
-        """Create a partner who is both customer and vendor, and another partner."""
-        super().setUpClass()
-        cls.company = cls.env.company
-        cls.partner = cls.env["res.partner"].create({"name": "Gold Customer"})
-        cls.other_partner = cls.env["res.partner"].create({"name": "Other Partner"})
-
-    # ------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------
-
-    def _move(self, move_type, amount, partner=None, date="2026-11-01", currency=None):
-        """Create a draft invoice or bill with one untaxed line."""
-        return self.env["account.move"].create({
-            "move_type": move_type,
-            "partner_id": (partner or self.partner).id,
-            "invoice_date": date,
-            "currency_id": (currency or self.company.currency_id).id,
-            "invoice_line_ids": [Command.create({
-                "name": "Gold",
-                "quantity": 1.0,
-                "price_unit": amount,
-                "tax_ids": [Command.clear()],
-            })],
-        })
-
-    def _bill(self, amount, **kwargs):
-        """Create and post a vendor bill."""
-        bill = self._move("in_invoice", amount, **kwargs)
-        bill.action_post()
-        return bill
-
-    def _pay(self, bill, amount):
-        """Settle part or all of a bill with a reconciled vendor credit note."""
-        refund = self._move("in_refund", amount)
-        refund.action_post()
-        (bill.line_ids | refund.line_ids).filtered(
-            lambda line: line.account_id.account_type == "liability_payable"
-        ).reconcile()
-
-    def _confirm(self, invoice):
-        """Click the invoice Confirm button."""
-        return invoice.with_context(netting_check=True).action_post()
-
-    # ------------------------------------------------------------
-    # Tests
-    # ------------------------------------------------------------
 
     def test_no_open_bills_posts_directly(self):
         """Without open bills, Confirm posts the invoice."""
@@ -66,10 +18,8 @@ class TestNettingPopup(TransactionCase):
         """With an open bill, Confirm opens the popup and the invoice stays draft."""
         bill = self._bill(600.0)
         invoice = self._move("out_invoice", 1000.0)
-        action = self._confirm(invoice)
-        self.assertEqual(action["res_model"], "account.netting.wizard")
+        wizard = self._wizard(invoice)
         self.assertEqual(invoice.state, "draft")
-        wizard = self.env["account.netting.wizard"].browse(action["res_id"])
         self.assertEqual(wizard.line_ids.bill_id, bill)
         self.assertEqual(wizard.netting_amount, 600.0)
 
@@ -98,15 +48,20 @@ class TestNettingPopup(TransactionCase):
         bill = self._bill(600.0)
         self._pay(bill, 200.0)
         invoice = self._move("out_invoice", 1000.0)
-        wizard = self.env["account.netting.wizard"].browse(self._confirm(invoice)["res_id"])
-        self.assertEqual(wizard.line_ids.amount_residual, 400.0)
+        self.assertEqual(self._wizard(invoice).line_ids.amount_residual, 400.0)
+
+    def test_bill_with_payment_in_process_excluded(self):
+        """A bill whose payment is registered but not yet posted is not offered."""
+        bill = self._bill(600.0)
+        bill.payment_state = "in_payment"
+        invoice = self._move("out_invoice", 1000.0)
+        self.assertFalse(self._confirm(invoice))
 
     def test_netting_limited_to_invoice_amount(self):
         """The amount to net never exceeds the invoice amount."""
         self._bill(700.0, date="2026-10-01")
         self._bill(500.0, date="2026-10-15")
-        invoice = self._move("out_invoice", 1000.0)
-        wizard = self.env["account.netting.wizard"].browse(self._confirm(invoice)["res_id"])
+        wizard = self._wizard(self._move("out_invoice", 1000.0))
         self.assertEqual(wizard.selected_amount, 1200.0)
         self.assertEqual(wizard.netting_amount, 1000.0)
 
@@ -114,34 +69,21 @@ class TestNettingPopup(TransactionCase):
         """Bills are listed from the oldest bill date."""
         newer = self._bill(100.0, date="2026-10-20")
         older = self._bill(100.0, date="2026-09-05")
-        invoice = self._move("out_invoice", 1000.0)
-        wizard = self.env["account.netting.wizard"].browse(self._confirm(invoice)["res_id"])
+        wizard = self._wizard(self._move("out_invoice", 1000.0))
         self.assertEqual(wizard.line_ids.bill_id.ids, [older.id, newer.id])
 
     def test_untick_reduces_amount(self):
         """Unticking a bill removes it from the amount to net."""
         self._bill(300.0, date="2026-10-01")
         self._bill(200.0, date="2026-10-02")
-        invoice = self._move("out_invoice", 1000.0)
-        wizard = self.env["account.netting.wizard"].browse(self._confirm(invoice)["res_id"])
+        wizard = self._wizard(self._move("out_invoice", 1000.0))
         wizard.line_ids[0].selected = False
         self.assertEqual(wizard.netting_amount, 200.0)
 
     def test_bill_in_other_currency_offered(self):
         """Bills in another currency are offered, valued in company currency."""
-        other = self.env.ref("base.EUR")
-        if other == self.company.currency_id:
-            other = self.env.ref("base.USD")
-        other.active = True
-        self.env["res.currency.rate"].create({
-            "currency_id": other.id,
-            "company_id": self.company.id,
-            "name": "2026-11-01",
-            "rate": 0.5,
-        })
-        bill = self._bill(100.0, currency=other)
-        invoice = self._move("out_invoice", 1000.0)
-        wizard = self.env["account.netting.wizard"].browse(self._confirm(invoice)["res_id"])
+        bill = self._bill(100.0, currency=self._other_currency(0.5))
+        wizard = self._wizard(self._move("out_invoice", 1000.0))
         self.assertEqual(wizard.line_ids.bill_id, bill)
         self.assertEqual(wizard.line_ids.amount_residual, 100.0)
         self.assertEqual(wizard.line_ids.amount_residual_company, abs(bill.amount_residual_signed))
@@ -151,8 +93,7 @@ class TestNettingPopup(TransactionCase):
         """Post Without Netting posts the invoice and leaves the bill open."""
         bill = self._bill(600.0)
         invoice = self._move("out_invoice", 1000.0)
-        wizard = self.env["account.netting.wizard"].browse(self._confirm(invoice)["res_id"])
-        wizard.action_post_without_netting()
+        self._wizard(invoice).action_post_without_netting()
         self.assertEqual(invoice.state, "posted")
         self.assertEqual(invoice.payment_state, "not_paid")
         self.assertEqual(bill.amount_residual, 600.0)
@@ -162,10 +103,3 @@ class TestNettingPopup(TransactionCase):
         self._move("in_invoice", 600.0)
         invoice = self._move("out_invoice", 1000.0)
         self.assertFalse(self._confirm(invoice))
-        
-    def test_bill_with_payment_in_process_excluded(self):
-        """A bill whose payment is registered but not yet posted is not offered."""
-        bill = self._bill(600.0)
-        bill.payment_state = "in_payment"
-        invoice = self._move("out_invoice", 1000.0)
-        self.assertFalse(self._confirm(invoice))        

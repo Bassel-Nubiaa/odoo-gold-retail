@@ -86,6 +86,95 @@ class AccountNettingWizard(models.TransientModel):
         self.invoice_id.with_context(netting_check=False).action_post()
         return {"type": "ir.actions.act_window_close"}
 
+    def action_net_and_post(self):
+        """Post the invoice and settle it against the selected bills, oldest first."""
+        self.ensure_one()
+        journal = self.invoice_id.company_id.netting_journal_id
+        selected = self.line_ids.filtered("selected")
+        self._check_netting(journal, selected)
+
+        bills = selected.bill_id
+        bills.filtered(lambda bill: bill.state == "draft").action_post()
+        self.invoice_id.with_context(netting_check=False).action_post()
+
+        allocations = self._allocate(bills)
+        if allocations:
+            entry = self._create_netting_entry(journal, allocations)
+            self._reconcile(entry, allocations)
+            self.invoice_id.netting_move_id = entry
+        return {"type": "ir.actions.act_window_close"}
+
+    # ------------------------------------------------------------
+    # Netting
+    # ------------------------------------------------------------
+
+    def _check_netting(self, journal, selected):
+        """Stop before posting anything when netting is not possible."""
+        if not journal:
+            raise UserError(_(
+                "Set a Netting Journal in Invoicing / Accounting settings before netting."
+            ))
+        if not selected:
+            raise UserError(_("Select at least one bill, or post without netting."))
+        if self.line_ids.filtered(lambda line: line.mandatory and not line.selected):
+            raise UserError(_("Bills that must be netted with this invoice cannot be unselected."))
+
+    def _allocate(self, bills):
+        """Spread the invoice's open amount over the bills, oldest first.
+
+        Returns a list of (bill, amount) in company currency; the last bill may be partial.
+        """
+        currency = self.company_currency_id
+        remaining = abs(self.invoice_id.amount_residual_signed)
+        allocations = []
+        for line in self.line_ids.filtered("selected"):
+            if currency.is_zero(remaining):
+                break
+            amount = min(remaining, abs(line.bill_id.amount_residual_signed))
+            if not currency.is_zero(amount):
+                allocations.append((line.bill_id, amount))
+                remaining -= amount
+        return allocations
+
+    def _create_netting_entry(self, journal, allocations):
+        """Create and post the entry: credit receivable, debit payable per bill."""
+        invoice = self.invoice_id
+        receivable = invoice._get_netting_payable_lines()[:1]
+        total = sum(amount for _bill, amount in allocations)
+        lines = [Command.create({
+            "name": _("Netting: %s", invoice.name),
+            "account_id": receivable.account_id.id,
+            "partner_id": invoice.commercial_partner_id.id,
+            "balance": -total,
+        })]
+        for bill, amount in allocations:
+            lines.append(Command.create({
+                "name": _("Netting: %s", bill.name),
+                "account_id": bill._get_netting_payable_lines()[:1].account_id.id,
+                "partner_id": bill.commercial_partner_id.id,
+                "balance": amount,
+            }))
+        entry = self.env["account.move"].create({
+            "move_type": "entry",
+            "journal_id": journal.id,
+            "date": invoice.invoice_date,
+            "ref": _("Netting of %s", invoice.name),
+            "currency_id": invoice.company_currency_id.id,
+            "line_ids": lines,
+        })
+        entry.action_post()
+        return entry
+
+    def _reconcile(self, entry, allocations):
+        """Reconcile the entry with the invoice and with each bill."""
+        invoice = self.invoice_id
+        entry_lines = entry._get_netting_payable_lines()
+        receivable = entry_lines.filtered(lambda line: line.balance < 0)
+        (receivable | invoice._get_netting_payable_lines()).reconcile()
+        for bill, _amount in allocations:
+            payable = entry_lines.filtered(lambda line: line.name == _("Netting: %s", bill.name))
+            (payable | bill._get_netting_payable_lines()).reconcile()
+
 
 class AccountNettingWizardLine(models.TransientModel):
     """One open bill offered in the netting popup."""
