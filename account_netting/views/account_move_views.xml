@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Invoice form: the Confirm button asks for the netting check -->
+    <record id="view_move_form_netting" model="ir.ui.view">
+        <field name="name">account.move.form.netting</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <!-- Confirm (invoices and bills), not Post (journal entries) -->
+            <xpath expr="//header/button[@name='action_post'][contains(@invisible, &quot;move_type == 'entry'&quot;)]"
+                   position="attributes">
+                <attribute name="context">{'validate_analytic': True, 'disable_abnormal_invoice_detection': False, 'netting_check': True}</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

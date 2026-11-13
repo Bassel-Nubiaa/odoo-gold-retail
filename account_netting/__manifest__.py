@@ -9,6 +9,9 @@
     "license": "LGPL-3",
     "depends": ["account"],
     "data": [
+        "security/ir.model.access.csv",
+        "wizard/account_netting_wizard_views.xml",
+        "views/account_move_views.xml",
         "views/res_config_settings_views.xml",
     ],
     "installable": True,
