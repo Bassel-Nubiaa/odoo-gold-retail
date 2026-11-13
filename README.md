@@ -1,28 +1,35 @@
 # Odoo Gold Retail
 
-Odoo modules for gold and jewelry retail: dropshipping one supplier purchase to
-several customers, and settling broken-gold transactions in accounting.
+Odoo modules for a gold trading company: bulk purchases resold to several customers before
+delivery, invoices netted against the same customer's bills, sales paid partly in old gold,
+gold stock and gold position reporting.
 
-Developed by Bassel Nubiaa, based on an Odoo implementation project for a gold
-retail business.
-
-## Branches
-
-| Branch | Odoo version | Status |
-|--------|--------------|--------|
-| `18.0` | 18.0         | In development |
+The modules rebuild, as clean and tested code, processes first implemented with Odoo Studio
+and custom developments for a gold trading company in the UAE.
 
 ## Modules
 
 | Module | Description | Status |
 |--------|-------------|--------|
-| Multi-customer dropshipping | One purchase order dropshipped to several customers | Available |
-| Broken-gold netting | Offsetting broken-gold purchases against customer invoices | Planned |
+| [`purchase_multi_dropship`](purchase_multi_dropship/README.md) | Split a confirmed purchase order between several customers: one sales order and one dropship per customer, the rest received into the warehouse | Available |
+| `account_netting` | Settle customer invoices against the same customer's open vendor bills when the invoice is confirmed | In development |
+| `sale_broken_gold` | Sales orders paid partly in old gold: the gold received becomes a vendor bill netted with the invoice | Planned |
+| `purchase_gold_stock` | Gold stock information in Purchase | Planned |
+| `account_gold_position` | Gold position report in Accounting | Planned |
+
+Install only modules marked **Available**: modules **In development** are incomplete.
+
+## Versions
+
+| Branch | Status |
+|--------|--------|
+| 18.0 | Active |
+| 17.0, 19.0 | Planned |
 
 ## License
 
-LGPL-3.0. See [LICENSE](LICENSE).
+LGPL-3. See [LICENSE](LICENSE).
 
 ## Author
 
-Bassel Nubiaa
+Bassel Nubiaa, [github.com/Bassel-Nubiaa](https://github.com/Bassel-Nubiaa)
